@@ -1,3 +1,5 @@
+# vim:set tabstop=4 shiftwidth=4 noexpandtab:
+
 use strict;
 use ExtUtils::MakeMaker;
 use Getopt::Long;
@@ -36,7 +38,8 @@ sub InitMakeParams
 		PM				=> { 'LibIDN.pm' => '$(INST_LIB)/Net/LibIDN.pm' },
 		clean			=> { FILES => "test.pl LibIDN.pm" }
 	);
-	my ($libdir, $incdir, $disable_tld);
+	my ($libdir, $incdir, $libdir2, $incdir2, $disable_tld, $disable_libidn2,
+		$force_libidn, $force_libidn2, $force_tld);
 
 	$options=join(' ', @ARGV);
 
@@ -44,36 +47,45 @@ sub InitMakeParams
 	(
 		"with-libidn=s" => \$libdir,
 		"with-libidn-inc=s" => \$incdir,
-		"disable-tld" => \$disable_tld
+		"with-libidn2=s" => \$libdir2,
+		"with-libidn2-inc=s" => \$incdir2,
+		"disable-tld" => \$disable_tld,
+		"disable-libidn2" => \$disable_libidn2,
+		"force-libidn" => \$force_libidn,
+		"force-libidn2" => \$force_libidn2,
+		"force-tld" => \$force_tld
 	);
 
-	if ($libdir)
+
+	$Params{INC} = '';
+	$Params{LIBS} = '';
+	$Params{DEFINE} = '';
+
+	$Params{LIBS} .= " -L$libdir" if $libdir;
+	$Params{LIBS} .= ' -lidn';
+	$Params{INC} .= "-I$incdir" if $incdir;
+
+	$Params{LIBS} .= "-L$libdir2" if $libdir2;
+	$Params{INC} = "-I$incdir2" if $incdir2;
+
+	my $libidn;
+	if ($force_libidn)
 	{
-		$Params{LIBS} = "-L$libdir -lidn";
+		$libidn = $force_tld?2:1;
+		print "Forced GNU LibIDN, ";
 	}
 	else
 	{
-		$Params{LIBS} = $Config{ldflags} . ' -lidn';
-	}
+		my $libidn = CheckLibidn($Params{INC}, $Params{LIBS});
 
-	if ($incdir)
-	{
-		$Params{INC} = "-I$incdir";
-	}
-	else
-	{
-		$Params{INC} = '';
-	}
+		unless($libidn)
+		{
+			print "This module requires GNU Libidn, which could not be found.\n" unless $libidn;
+			exit 0;
+		}
 
-	my $libidn = CheckLibidn($Params{INC}, $Params{LIBS});
-
-	unless($libidn)
-	{
-		print "This module requires GNU Libidn, which could not be found.\n" unless $libidn;
-		exit 0;
+		print "Found GNU LibIDN, ";
 	}
-
-	print "Found LibIDN, ";
 	print $libidn == 1? "without": "with";
 	print " TLD checking support\n";
 
@@ -84,65 +96,83 @@ sub InitMakeParams
 
 	$disable_tld = 1 if ($libidn<2);
 
-	if ($disable_tld)
+	$Params{DEFINE} .= ' -DHAVE_TLD' unless $disable_tld;
+
+	my $libidn2;
+
+	if ($force_libidn2)
 	{
-		$Params{DEFINE} = '';
+		$libidn2 = 1;
+		print "Forced GNU LibIDN2\n";
 	}
 	else
 	{
-		$Params{DEFINE} = '-DHAVE_TLD';
+		$libidn2 = CheckLibidn2($Params{INC}, $Params{LIBS}. ' -lidn2');
+		print "Found GNU LibIDN2\n" if $libidn2;
 	}
-	FilterTLD("_LibIDN.pm", "LibIDN.pm", !$disable_tld);
-	FilterTLD("_test.pl", "test.pl", !$disable_tld);
+	
+	if ($libidn2)
+	{
+		$Params{LIBS} .= ' -lidn2';
+		$Params{DEFINE} .= ' -DHAVE_LIBIDN2';
+	}
+
+	Filter("_LibIDN.pm", "LibIDN.pm", {TLD => !$disable_tld, IDN2 => $libidn2});
+	Filter("_test.pl", "test.pl", {TLD => !$disable_tld, IDN2 => $libidn2});
 
 	return(%Params);
 }
 
-sub FilterTLD
+sub Filter
 {
-	my $in = shift;
-	my $out = shift;
-	my $tld = shift;
+	my ($in, $out, $tags) = @_;
 	local *IN, *OUT;
 
 	open(IN, "<$in") || die "Can't open file $in\n";
 	open(OUT, ">$out") || die "Can't write file $out\n";
 
-	my ($inside, $else);
-	while(<IN>)
+	my (%inside, %else);
+
+OUTER:
+	while (my $line = <IN>)
 	{
-		if (m/^#IF_TLD/)
+		while (my ($tag, $include) = each %$tags)
 		{
-			$inside = 1;
-			next;
-		}
-		if (m/^#ELSE_TLD/)
-		{
-			$else = 1;
-			next;
-		}
-		if (m/^#ENDIF_TLD/)
-		{
-			$inside = 0;
-			$else = 0;
-			next;
-		}
-		if ($inside)
-		{
-			if ($tld)
+			if ($line =~ m/^#IF_$tag/)
 			{
-				print OUT $_ unless $else;
+				$inside{$tag} = 1;
+				next OUTER;
 			}
-			elsif($else)
+			if ($line =~ m/^#ELSE_$tag/)
 			{
-				print OUT $_;
+				$else{$tag} = 1;
+				next OUTER;
+			}
+			if ($line =~ m/^#ENDIF_$tag/)
+			{
+				$inside{$tag} = 0;
+				$else{$tag} = 0;
+				next OUTER;
 			}
 		}
-		else
+
+		my $output = 1;
+		while (my ($tag, $include) = each %$tags)
 		{
-			print OUT $_;
+			if ($inside{$tag})
+			{
+				if ($include)
+				{
+					$output = 0 if $else{$tag}
+				}
+				elsif (!$else{$tag})
+				{
+					$output = 0;
+				}
+			}
 		}
-		
+
+		print OUT $line if $output;
 	}
 }
 
@@ -165,9 +195,10 @@ sub CheckCCode
 		return 0;
 	}
 
-	foreach my $cc (qw/cc gcc/)
+	foreach my $cc ($Config{cc})
 	{
 		unlink($test);
+		print "$cc $cflags -o $test $test.c $ldflags\n";
 		system "$cc $cflags -o $test $test.c $ldflags";
 		next if ($? >> 8);
 
@@ -237,5 +268,34 @@ EOT
 	return $result unless CheckCCode($test2, $cflags, $ldflags, "0-idn");
 	
 	return 2;
+}
+
+sub CheckLibidn2
+{
+	my $cflags = shift;
+	my $ldflags = shift;
+	my $result;
+	my $final;
+	local * FILE;
+
+	my $test1 = <<EOT;
+#include <idn2.h>
+#include <stdio.h>
+int main(void)
+{
+	const char * output = idn2_check_version ("0.3");
+	
+	if (output == NULL)
+	{
+		printf("%s", output);
+		return 0;
+	}
+	else
+		return 1;
+}
+EOT
+	return $result unless CheckCCode($test1, $cflags, $ldflags, "0.3", 1);
+
+	$result = 1;
 }
 

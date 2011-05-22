@@ -1,3 +1,5 @@
+/* vim:set tabstop=4 shiftwidth=4 noexpandtab: */
+
 #include "EXTERN.h"
 #include "perl.h"
 #include "XSUB.h"
@@ -9,6 +11,10 @@
 
 #ifdef HAVE_TLD
 #include <tld.h>
+#endif
+
+#ifdef HAVE_LIBIDN2
+#include <idn2.h>
 #endif
 
 #define MAX_DNSLEN 4096
@@ -51,15 +57,23 @@ constant(char *name, int len, int arg)
 	switch (name[0 + 5]) 
 	{
 		case 'A':
-		if (strEQ(name + 0, "IDNA_ALLOW_UNASSIGNED"))
-		{
-			return IDNA_ALLOW_UNASSIGNED;
-		}
-    case 'U':
-		if (strEQ(name + 0, "IDNA_USE_STD3_ASCII_RULES"))
-		{
-			return IDNA_USE_STD3_ASCII_RULES;
-		}
+			if (strEQ(name + 0, "IDNA_ALLOW_UNASSIGNED"))
+				return IDNA_ALLOW_UNASSIGNED;
+#ifdef HAVE_LIBIDN2
+			else if (strEQ(name + 0, "IDN2_ALABEL_ROUNDTRIP"))
+				return IDN2_ALABEL_ROUNDTRIP;
+#endif
+			break;
+		case 'U':
+			if (strEQ(name + 0, "IDNA_USE_STD3_ASCII_RULES"))
+				return IDNA_USE_STD3_ASCII_RULES;
+			break;
+#ifdef HAVE_LIBIDN2
+		case 'N':
+			if (strEQ(name + 0, "IDN2_NFC_INPUT"))
+				return IDN2_NFC_INPUT;
+			break;
+#endif
 	}
 	errno = EINVAL;
 	return 0;
@@ -548,3 +562,64 @@ tld_get_table(tld)
 		RETVAL
 
 #endif /* #ifdef HAVE_TLD */
+
+#ifdef HAVE_LIBIDN2
+char *
+idn2_lookup(src, flags=0)
+		char * src
+		int flags
+	PROTOTYPE: $;$
+	PREINIT:
+		uint8_t * lookupname = NULL;
+		int res;
+	CODE:
+		res = idn2_lookup_u8(
+			(const uint8_t *)src,
+			(uint8_t **)&lookupname,
+			flags);
+
+		if (res == IDN2_OK)
+			RETVAL = lookupname;
+		else
+			 XSRETURN_UNDEF;
+	OUTPUT:
+		RETVAL
+	CLEANUP:
+		idn2_free(lookupname);
+		
+char *
+idn2_register(ulabel, alabel=NULL, flags=0, result=0)
+		char * ulabel
+		char * alabel
+		int flags
+		int result
+	PROTOTYPE: $;$$$
+	PREINIT:
+		uint8_t * insertname = NULL;
+		int res;
+	CODE:
+		if (items>1 && ST(1) == &PL_sv_undef)
+			alabel = NULL;
+		if (items>2 && ST(2) == &PL_sv_undef)
+			flags = 0;
+
+		res = idn2_register_u8(
+			(const uint8_t *)ulabel,
+			(const uint8_t *)alabel,
+			(uint8_t **)&insertname,
+			flags);
+
+		if (items>3 && ST(3) != &PL_sv_undef)
+			result = res;
+
+		if (res == IDN2_OK)
+			RETVAL = insertname;
+		else
+			XSRETURN_UNDEF;
+	OUTPUT:
+		RETVAL
+		result
+	CLEANUP:
+		idn2_free(insertname);
+
+#endif /* HAVE_LIBIDN2 */
