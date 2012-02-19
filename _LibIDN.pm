@@ -38,16 +38,8 @@ our %EXPORT_TAGS = ( 'all' => [ qw(
 	tld_get
 	tld_get_table
 #ENDIF_TLD
-#IF_IDN2
-	idn2_lookup
-	idn2_register
-#ENDIF_IDN2
 	IDNA_ALLOW_UNASSIGNED
 	IDNA_USE_STD3_ASCII_RULES
-#IF_IDN2
-	IDN2_NFC_INPUT
-	IDN2_ALABEL_ROUNDTRIP
-#ENDIF_IDN2
 ) ] );
 
 our @EXPORT_OK = ( @{ $EXPORT_TAGS{'all'} } );
@@ -56,7 +48,7 @@ our @EXPORT = qw(
 	IDNA_ALLOW_UNASSIGNED
 	IDNA_USE_STD3_ASCII_RULES
 );
-our $VERSION = '0.20';
+our $VERSION = '0.12';
 
 # avoid prototyping error message
 

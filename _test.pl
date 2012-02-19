@@ -6,18 +6,11 @@
 use strict;
 use Test;
 
-BEGIN 
-{
-	my $tests = 10;
 #IF_TLD
-	$tests += 11;
-#ENDIF_TLD;
-#IF_IDN2
-	$tests += 5;
-#ENDIF_IDN2;
-
-	plan tests => $tests, todo => [] 
-};
+BEGIN { plan tests => 21, todo => [] };
+#ELSE_TLD
+BEGIN { plan tests => 10, todo => [] };
+#ENDIF_TLD
 
 use Net::LibIDN;
 
@@ -80,15 +73,3 @@ ok(Net::LibIDN::tld_get("GR\xC3\xB6\xC3\x9Fer"), undef);
 ok(Net::LibIDN::tld_get_table("mars"), undef);
 
 #ENDIF_TLD
-
-#IF_IDN2
-
-{
-my $result;
-ok(Net::LibIDN::idn2_lookup("müßli.de"), "xn--mli-5ka8l.de");
-ok(Net::LibIDN::idn2_lookup("müßli.de", undef), "xn--mli-5ka8l.de");
-ok(Net::LibIDN::idn2_register("müßli"), "xn--mli-5ka8l");
-ok(Net::LibIDN::idn2_register("müßli", undef), "xn--mli-5ka8l");
-ok(Net::LibIDN::idn2_register("müßli", undef, undef), "xn--mli-5ka8l", $result);
-}
-#ENDIF_IDN2
