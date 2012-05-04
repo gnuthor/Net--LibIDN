@@ -64,7 +64,7 @@ sub InitMakeParams
 	}
 	else
 	{
-		$Params{INC} = '';
+		$Params{INC} = $Config{ccflags};
 	}
 
 	my $libidn = CheckLibidn($Params{INC}, $Params{LIBS});
