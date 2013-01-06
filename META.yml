@@ -8,3 +8,8 @@ requires:
 
 distribution_type: module
 generated_by: ExtUtils::MakeMaker version 6.30_01
+
+resources:
+  bugtracker: https://rt.cpan.org/Public/Dist/Display.html?Name=Net-LibIDN
+  homepage: https://metacpan.org/release/Net-LibIDN
+  repository: https://github.com/gnuthor/Net--LibIDN
