@@ -1,5 +1,8 @@
 Revision history for Perl extension Net::LibIDN.
 
+0.13
+	- Pulled c0decafe's Makefile.PL improvement
+
 0.12  Thu Feb 26 13:44:06 CET 2009
 	- Applied NetBSD compatibility patch (Thanks Havard Eidnes), fixes #39294
 	- Applied Win32 memory free compatibility patch (Thanks CPAN user SISYPHUS),
@@ -61,3 +64,4 @@ Revision history for Perl extension Net::LibIDN.
 		of Turbo Fredriksson's php-idn bindings
 		(http://php-idn.bayour.com/)
 
+# vim:set tabstop=4 shiftwidth=4 noexpandtab:
